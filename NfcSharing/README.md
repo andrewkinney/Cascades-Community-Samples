@@ -19,8 +19,10 @@ the [Apache 2.0 License](http://www.apache.org/licenses/LICENSE-2.0.html).
 
 **Release History**
 
-* **V1.0.1** - Fix to minor race condition.
 * **V1.0.0** - Inital version.
+* **V1.0.1** - Fix to minor race condition.
+* **V1.1.0** - Brought into line with Gold NDK and 720x720 screen size.
+* **V1.1.1** - Minor fix to File Share Checkboxes and checked on 10.2
 
 **Known Issues**
 
@@ -28,8 +30,8 @@ None.
 
 **Dependencies**
 
-1. BlackBerry Dev Alpha Beta 4 Device Software **10.0.9**
-1. BlackBerry 10 Native SDK for Beta 4 **10.0.9**
+1. Requires BlackBerry 10 Device Software **10.0.9** or above
+1. Requires BlackBerry 10 Native SDK **10.0.9** (Gold) or above
 
 **How to Build NfcSharing**
 
