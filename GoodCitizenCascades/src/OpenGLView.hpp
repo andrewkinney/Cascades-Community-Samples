@@ -156,7 +156,7 @@ protected:
 
 
 	// display methods
-	EGLDisplay display();
+	VIEW_DISPLAY display();
 
 	// API / screen property calls
 	void setAPI(RENDERING_API api);

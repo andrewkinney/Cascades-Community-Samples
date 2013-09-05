@@ -186,14 +186,14 @@ int OpenGLThread::initBPS() {
 int OpenGLThread::initEGL() {
     int returnCode, type;
     int num_configs;
-
-    m_numberDisplays = 0;
     EGLint attrib_list[]= { EGL_RED_SIZE,        8,
                             EGL_GREEN_SIZE,      8,
                             EGL_BLUE_SIZE,       8,
                             EGL_SURFACE_TYPE,    EGL_WINDOW_BIT,
                             EGL_RENDERABLE_TYPE, EGL_OPENGL_ES_BIT,
                             EGL_NONE};
+
+    m_numberDisplays = 0;
 
 	screen_get_context_property_iv(m_screen_ctx, SCREEN_PROPERTY_DISPLAY_COUNT, &m_numberDisplays);
 
@@ -221,6 +221,12 @@ int OpenGLThread::initEGL() {
     if (returnCode != EGL_TRUE) {
         eglPrintError("eglBindApi");
         return EXIT_FAILURE;
+    }
+
+    if (m_api == GL_ES_2) {
+    	attrib_list[9] = EGL_OPENGL_ES2_BIT;
+    } else if (m_api == VG) {
+    	attrib_list[9] = EGL_OPENVG_BIT;
     }
 
     if(!eglChooseConfig(m_egl_disp, attrib_list, &m_egl_conf, 1, &num_configs)) {
@@ -286,7 +292,7 @@ void OpenGLThread::update() {
 		}
 
 		for(index = 0; index < m_views.size(); index++) {
-			if (m_views.at(index)->display() == m_egl_disp_hdmi) {
+			if (m_views.at(index)->display() == DISPLAY_HDMI) {
 				if (attached) {
 					m_views.at(index)->setVisible(true);
 				} else {
@@ -385,7 +391,7 @@ void OpenGLThread::render() {
 		}
 
 		for(index = 0; index < m_views.size(); index++) {
-			if (m_views.at(index)->display() == m_egl_disp_hdmi) {
+			if (m_views.at(index)->display() == DISPLAY_HDMI) {
 				if (attached) {
 					m_views.at(index)->setVisible(true);
 				} else {
@@ -451,7 +457,7 @@ void OpenGLThread::handleScreenEvent(bps_event_t *event) {
 						m_viewsMutex.lock();
 
 						for(index = 0; index < m_views.size(); index++) {
-							if (m_views.at(index)->display() == m_egl_disp_hdmi && index == 1) {
+							if (m_views.at(index)->display() == DISPLAY_HDMI && index == 1) {
 								if (attached) {
 									m_views.at(index)->setVisible(true);
 								} else {
@@ -592,6 +598,36 @@ bool OpenGLThread::isDisplayAttached(VIEW_DISPLAY display)
 	}
 
 	return egl_display;
+}
+
+int* OpenGLThread::getDisplaySize(VIEW_DISPLAY display)
+{
+	int *size = new int[2] { 0 };
+	int index = 0;
+	int type = 0;
+	int attached = 0;
+
+	m_viewsMutex.lock();
+
+	for (index = 0; index < m_numberDisplays; index++) {
+		screen_get_display_property_iv(m_screen_dpy[index], SCREEN_PROPERTY_TYPE,  &type);
+		attached = 0;
+
+		if (type == SCREEN_DISPLAY_TYPE_HDMI) {
+			screen_get_display_property_iv(m_screen_dpy[index], SCREEN_PROPERTY_ATTACHED, &attached);
+
+			if (attached) {
+				screen_get_display_property_iv(m_screen_dpy[index], SCREEN_PROPERTY_SIZE, size);
+				if (size[0] == 0 || size[1] == 0) {
+					attached = 0;
+				}
+			}
+		}
+	}
+
+	m_viewsMutex.unlock();
+
+	return size;
 }
 
 OpenGLThread* OpenGLThread::getInstance()

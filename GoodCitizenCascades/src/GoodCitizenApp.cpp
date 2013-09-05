@@ -70,9 +70,7 @@ GoodCitizenApp::GoodCitizenApp()
         	m_fwBound = false;
          	m_pForeignWindowControl = m_navPane->findChild<ForeignWindowControl*>("goodCitizenCascadesFW");
 
-         	LayoutUpdateHandler *handler = LayoutUpdateHandler::create(m_pForeignWindowControl)
-        	    .onLayoutFrameChanged(this, SLOT(onLayoutFrameChanged(const QRectF &)));
-
+         	QObject::connect(m_pForeignWindowControl, SIGNAL(controlFrameChanged(const QRectF &)), this, SLOT(onLayoutFrameChanged(const QRectF &)));
 
     		// connect ForeignWindowControl signals to slots
     		QObject::connect(m_pForeignWindowControl, SIGNAL(touch(bb::cascades::TouchEvent *)),
@@ -97,23 +95,25 @@ void GoodCitizenApp::onLayoutFrameChanged(const QRectF &layoutFrame) {
 
 	fprintf(stderr, "fw size: %f,%f %fx%f\n", layoutFrame.x(), layoutFrame.y(), layoutFrame.width(), layoutFrame.height());
 
-	if (m_fwBound == false) {
-		m_fwBound = true;
+	if (layoutFrame.width() > 0 && layoutFrame.height() > 0) {
+		if (m_fwBound == false) {
+			m_fwBound = true;
 
-		QString mainWindowGroupId = Application::instance()->mainWindow()->groupId();
+			QString mainWindowGroupId = Application::instance()->mainWindow()->groupId();
 
-		m_pGoodCitizen->setWindowGroup(mainWindowGroupId);
-		m_pGoodCitizen->setWindowID("goodCitizenCascadesAppID1");
-		m_pGoodCitizen->setPosition(layoutFrame.x(), layoutFrame.y());
-		m_pGoodCitizen->setSize(layoutFrame.width(), layoutFrame.height());
-		m_pGoodCitizen->add();
-		m_pGoodCitizen->setEnabled(true);
+			m_pGoodCitizen->setWindowGroup(mainWindowGroupId);
+			m_pGoodCitizen->setWindowID("goodCitizenCascadesAppID1");
+			m_pGoodCitizen->setPosition(layoutFrame.x(), layoutFrame.y());
+			m_pGoodCitizen->setSize(layoutFrame.width(), layoutFrame.height());
+			m_pGoodCitizen->add();
+			m_pGoodCitizen->setEnabled(true);
 
-		m_pForeignWindowControl->setVisible(true);
-	} else {
-		m_pGoodCitizen->setAngle(OrientationSupport::instance()->displayDirection());
-		m_pGoodCitizen->setPosition(layoutFrame.x(), layoutFrame.y());
-		m_pGoodCitizen->setSize(layoutFrame.width(), layoutFrame.height());
-		m_pGoodCitizen->setAltered(true);
+			m_pForeignWindowControl->setVisible(true);
+		} else {
+			m_pGoodCitizen->setAngle(OrientationSupport::instance()->displayDirection());
+			m_pGoodCitizen->setPosition(layoutFrame.x(), layoutFrame.y());
+			m_pGoodCitizen->setSize(layoutFrame.width(), layoutFrame.height());
+			m_pGoodCitizen->setAltered(true);
+		}
 	}
 }

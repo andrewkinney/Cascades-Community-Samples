@@ -17,6 +17,7 @@
 #include <bb/cascades/Application>
 
 #include "GoodCitizenApp.hpp"
+#include <errno.h>
 
 using ::bb::cascades::Application;
 

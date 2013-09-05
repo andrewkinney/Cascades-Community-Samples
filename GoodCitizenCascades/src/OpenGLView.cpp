@@ -59,23 +59,6 @@ int OpenGLView::initGL()
     EGLBoolean status;
     int type;
     EGLint attributes[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
-    EGLint attrib_list[]= { EGL_RED_SIZE,        8,
-                            EGL_GREEN_SIZE,      8,
-                            EGL_BLUE_SIZE,       8,
-                            EGL_SURFACE_TYPE,    EGL_WINDOW_BIT,
-                            EGL_RENDERABLE_TYPE, EGL_OPENGL_ES_BIT,
-                            EGL_NONE};
-
-    // try this first as it will fail if an HDMI display is not attached
-    if (m_api == GL_ES_2) {
-        m_egl_ctx = eglCreateContext(m_egl_disp, m_egl_conf, EGL_NO_CONTEXT, attributes);
-    } else {
-        m_egl_ctx = eglCreateContext(m_egl_disp, m_egl_conf, EGL_NO_CONTEXT, NULL);
-    }
-    if (m_egl_ctx == EGL_NO_CONTEXT) {
-        perror("eglCreateContext");
-        return EXIT_FAILURE;
-    }
 
 	screen_get_context_property_iv(m_screen_ctx, SCREEN_PROPERTY_DISPLAY_COUNT, &numberDisplays);
 
@@ -194,14 +177,22 @@ int OpenGLView::initGL()
 		return EXIT_FAILURE;
 	}
 
+    // try this first as it will fail if an HDMI display is not attached
+    if (m_api == GL_ES_2) {
+        m_egl_ctx = eglCreateContext(m_egl_disp, m_egl_conf, EGL_NO_CONTEXT, attributes);
+    } else {
+        m_egl_ctx = eglCreateContext(m_egl_disp, m_egl_conf, EGL_NO_CONTEXT, NULL);
+    }
+    if (m_egl_ctx == EGL_NO_CONTEXT) {
+        perror("eglCreateContext");
+        return EXIT_FAILURE;
+    }
 
     if (m_api == GL_ES_1) {
         m_usage = SCREEN_USAGE_OPENGL_ES1 | SCREEN_USAGE_ROTATION;
     } else if (m_api == GL_ES_2) {
-    	attrib_list[9] = EGL_OPENGL_ES2_BIT;
     	m_usage = SCREEN_USAGE_OPENGL_ES2 | SCREEN_USAGE_ROTATION;
     } else if (m_api == VG) {
-    	attrib_list[9] = EGL_OPENVG_BIT;
     	m_usage = SCREEN_USAGE_OPENVG | SCREEN_USAGE_ROTATION;
     } else {
         fprintf(stderr, "invalid api setting\n");
@@ -261,9 +252,9 @@ int OpenGLView::initGL()
 	return EXIT_SUCCESS;
 }
 
-EGLDisplay OpenGLView::display()
+VIEW_DISPLAY OpenGLView::display()
 {
-	return m_egl_disp;
+	return m_display;
 }
 
 void OpenGLView::setDisplay(VIEW_DISPLAY display)

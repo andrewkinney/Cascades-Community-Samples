@@ -62,6 +62,7 @@ public:
 	// get the desired display
 	EGLDisplay getDisplay(VIEW_DISPLAY display);
 	bool isDisplayAttached(VIEW_DISPLAY display);
+	int* getDisplaySize(VIEW_DISPLAY display);
 
 	// read / set the GL rendering API
 	bool renderingAPI();
