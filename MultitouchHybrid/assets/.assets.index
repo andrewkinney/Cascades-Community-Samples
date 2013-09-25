@@ -1,0 +1,9 @@
+1
+7
+images/actions/colourAction.png
+images/actions/objectsAction.png
+images/actions/resetAction.png
+images/actions/rotateAction.png
+images/actions/scaleAction.png
+images/actions/translateAction.png
+main.qml
