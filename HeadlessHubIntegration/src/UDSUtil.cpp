@@ -36,6 +36,7 @@ UDSUtil::UDSUtil(QString serviceURL, QString hubAssetsFolderName) :
     QString tmpPath = QDir::current().absoluteFilePath("data");
     tmpPath = tmpPath.replace("/data", "/public/");
     tmpPath = tmpPath.append(hubAssetsFolderName);
+    tmpPath = tmpPath.append("/");
     tmpPath = tmpPath.replace("/accounts/1000/appdata", "/apps");
 
     memset(_assetPath, 0, 256);
