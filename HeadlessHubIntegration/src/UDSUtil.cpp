@@ -41,8 +41,6 @@ UDSUtil::UDSUtil(QString serviceURL, QString hubAssetsFolderName) :
     memset(_assetPath, 0, 256);
     strcpy(_assetPath, tmpPath.toUtf8().data());
     qDebug() << "UDSUtil::UDSUtil: assetPath: " << _assetPath;
-
-    initialize();
 }
 
 UDSUtil::~UDSUtil() {
