@@ -21,20 +21,10 @@
 using namespace bb::network;
 using namespace bb::system;
 
-/*
 const QString PushManager::BLACKBERRY_PUSH_APPLICATION_ID =
         "Application ID";
 const QString PushManager::BLACKBERRY_PUSH_URL =
         "http://cp###.pushapi.eval.blackberry.com/";
-*/
-const QString PushManager::BLACKBERRY_PUSH_APPLICATION_ID =
-        "1154-58193ee1r92IMI3010ar06658089l75ke43";
-//const QString PushManager::BLACKBERRY_PUSH_APPLICATION_ID =
-//        "1548-1n8rla5o240hh3l8t1";
-const QString PushManager::BLACKBERRY_PUSH_URL =
-        "http://cp1154.pushapi.na.blackberry.com/";
-//const QString PushManager::BLACKBERRY_PUSH_URL =
-//        "http://cp1548.pushapi.eval.blackberry.com/";
 
 //Update this value as well as the invoke-target id in the bar-descriptor.xml file
 const QString PushManager::BLACKBERRY_INVOKE_TARGET_ID = "com.example.HeadlessHubIntegration";
