@@ -63,17 +63,24 @@ qint64 HubCache::lastCategoryId()
     return _categories.size();
 }
 
-QVariantMap HubCache::categories()
+QVariantList HubCache::categories()
 {
 	if (_settings->contains(_categoryIdKey)) {
-		_categories[_settings->value(_categoryNameKey).toString()] = _settings->value(_categoryIdKey).toLongLong();
+	    QVariantMap category;
+	    category["categoryId"] = _settings->value(_categoryIdKey).toLongLong();
+	    category["name"] = _settings->value(_categoryNameKey).toString();
+	    category["parentCategoryId"] = 0; // default parent category ID for root categories
+
+		_categories << category;
 
 		// legacy QSettings cache restore - should only be called once if updating from older code
 		_settings->remove(_categoryIdKey);
 		_settings->remove(_categoryNameKey);
 
+	    _settings->setValue(_categoriesKey, _categories);
+
     } else if (_settings->contains(_categoriesKey)) {
-    	_categories = _settings->value(_categoriesKey).toMap();
+    	_categories = _settings->value(_categoriesKey).toList();
     }
 
 	return _categories;
@@ -148,7 +155,7 @@ void HubCache::setAccountName(QString accountName)
 	}
 }
 
-void HubCache::setCategories(QVariantMap categories)
+void HubCache::setCategories(QVariantList categories)
 {
 	_categories = categories;
 
@@ -167,11 +174,10 @@ void HubCache::addItem(QVariantMap itemMap)
 void HubCache::updateItem(qint64 itemId, QVariantMap itemMap)
 {
     if (itemId > 0) {
-        QString itemIdString = QString::number(itemId);
         for(int index = 0; index < _items.size(); index++) {
             QVariantMap item = _items.at(index).toMap();
-            if (item["sourceId"].toString() == itemIdString) {
-                _items[itemId] = itemMap;
+            if (item["sourceId"].toLongLong() == itemId) {
+                _items[index] = itemMap;
                 break;
             }
         }
@@ -183,11 +189,10 @@ void HubCache::updateItem(qint64 itemId, QVariantMap itemMap)
 void HubCache::removeItem(qint64 itemId)
 {
     if (itemId > 0) {
-        QString itemIdString = QString::number(itemId);
         for(int index = 0; index < _items.size(); index++) {
             QVariantMap item = _items.at(index).toMap();
-            if (item["sourceId"].toString() == itemIdString) {
-                _items.removeAt(itemId);
+            if (item["sourceId"].toLongLong() == itemId) {
+                _items.removeAt(index);
                 if (itemId == _lastItemId) {
                     _lastItemId--;
                 }

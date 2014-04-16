@@ -420,7 +420,7 @@ void UDSUtil::cleanupAccountsExcept(const qint64 accountId, const QString& name)
 	qDebug() << "UDSUtil::cleanupAccountsExcept: Accounts Removed: " << accRemoved;
 }
 
-qint64 UDSUtil::addCategory(qint64 accountId, QString name) {
+qint64 UDSUtil::addCategory(qint64 accountId, QString name, qint64 parentCategoryId = 0) {
     int retVal = -1;
     int retCode = 0;
     char categoryName[256];
@@ -440,7 +440,7 @@ qint64 UDSUtil::addCategory(qint64 accountId, QString name) {
 
     uds_category_data_t *category = uds_category_data_create();
     uds_category_data_set_id(category, _nextCategoryId);
-    uds_category_data_set_parent_id(category, 0);
+    uds_category_data_set_parent_id(category, parentCategoryId);
     uds_category_data_set_account_id(category, accountId);
     uds_category_data_set_name(category, categoryName);
 
@@ -468,7 +468,7 @@ qint64 UDSUtil::addCategory(qint64 accountId, QString name) {
     return retVal;
 }
 
-bool UDSUtil::updateCategory(qint64 accountId, qint64 categoryId, QString name) {
+bool UDSUtil::updateCategory(qint64 accountId, qint64 categoryId, QString name, qint64 parentCategoryId = 0) {
     bool retVal = true;
     int retCode = 0;
     char categoryName[256];
@@ -488,7 +488,7 @@ bool UDSUtil::updateCategory(qint64 accountId, qint64 categoryId, QString name) 
 
     uds_category_data_t *category = uds_category_data_create();
     uds_category_data_set_id(category,  categoryId);
-    uds_category_data_set_parent_id(category, 0);
+    uds_category_data_set_parent_id(category, parentCategoryId);
     uds_category_data_set_account_id(category, accountId);
     uds_category_data_set_name(category, categoryName);
 

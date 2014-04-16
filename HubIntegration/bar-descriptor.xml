@@ -188,7 +188,7 @@
 			<property var="uris" value="data://,pim:"/>
 		</filter>
 		<filter>
-			<action>bb.action.MARKPRIORDELETE</action>
+			<action>bb.action.DELETEPRIOR</action>
 			<mime-type>hub/vnd.test.item</mime-type>
 			<property var="uris" value="data://,pim:"/>
 		</filter>

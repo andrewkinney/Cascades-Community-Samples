@@ -4,7 +4,7 @@
 <context>
     <name>ApplicationUI</name>
     <message>
-        <location filename="../src/applicationui.cpp" line="186"/>
+        <location filename="../src/applicationui.cpp" line="188"/>
         <source>Success!</source>
         <translation type="unfinished"></translation>
     </message>

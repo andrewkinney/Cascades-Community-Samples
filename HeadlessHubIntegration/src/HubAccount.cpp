@@ -36,7 +36,7 @@ HubAccount::~HubAccount() {
 	// TODO Auto-generated destructor stub
 }
 
-QVariantMap HubAccount::categories()
+QVariantList HubAccount::categories()
 {
 	return _hubCache->categories();
 }
@@ -51,7 +51,7 @@ void HubAccount::initialize()
         _accountId = _hubCache->accountId();
 
         if (_hubCache->accountId() < 0) {
-            _accountId = _udsUtil->addAccount(_name, _displayName, _serverName, _cardTarget,
+            _accountId = _udsUtil->addAccount(_name, _displayName, _serverName, _headlessTarget,
                                             _iconFilename, _lockedIconFilename, _composeIconFilename,
                                             _description,  _supportsCompose, UDS_ACCOUNT_TYPE_OTHER);
 
@@ -97,7 +97,7 @@ void HubAccount::initialize()
     }
 }
 
-void HubAccount::initializeCategories(QStringList newCategories)
+void HubAccount::initializeCategories(QVariantList newCategories)
 {
     qDebug()  << "HubAccount::initializeCategories " << _categoriesInitialized;
 
@@ -105,16 +105,17 @@ void HubAccount::initializeCategories(QStringList newCategories)
         qint64 retVal = -1;
 
         if (_hubCache->categories().size() == 0) {
-            QVariantMap categories;
+            QVariantList categories;
 
             for(int index = 0; index < newCategories.size(); index++) {
-                retVal = _udsUtil->addCategory(_accountId, newCategories[index]);
+                QVariantMap category = newCategories[index].toMap();
+                retVal = _udsUtil->addCategory(_accountId, category["name"].toString(), category["parentCategoryId"].toLongLong());
                 if (retVal == -1) {
-                    qDebug() << "HubAccount::initializeCategories: add category failed for: " << newCategories[index];
+                    qDebug() << "HubAccount::initializeCategories: add category failed for: " << category;
                     break;
                 }
 
-                categories[newCategories[index]] = QVariant(retVal);
+                categories << category;
             }
 
             if (retVal > 0) {
@@ -157,7 +158,20 @@ QVariant* HubAccount::getHubItemBySyncID(qint64 categoryId, QString syncId)
 
 QVariantList HubAccount::items()
 {
-    return _hubCache->items();
+    QVariantList _items = _hubCache->items();
+    QVariantList items;
+
+    if (_items.size() > 0) {
+        for(int index = 0; index < _items.size(); index++) {
+            QVariantMap itemMap = _items.at(index).toMap();
+
+            if (itemMap["accountId"].toLongLong() ==  _accountId) {
+                items << itemMap;
+            }
+        }
+    }
+
+    return items;
 }
 
 bool HubAccount::addHubItem(qint64 categoryId, QVariantMap &itemMap, QString name, QString subject, qint64 timestamp, QString itemSyncId,  QString itemUserData, QString itemExtendedData, bool notify)
@@ -218,6 +232,111 @@ bool HubAccount::removeHubItem(qint64 categoryId, qint64 itemId)
     }
 
     return (retVal > 0);
+}
+
+bool HubAccount::markHubItemRead(qint64 categoryId, qint64 itemId)
+{
+    bool retVal = false;
+    qDebug()  << "HubAccount::markHubItemRead: " << categoryId << " : " << itemId;
+
+    QVariant* item = getHubItem(categoryId, itemId);
+
+    if (item) {
+        QVariantMap itemMap = item->toMap();
+
+        itemMap["readCount"] = 1;
+        itemMap["totalCount"] = 1;
+
+        qDebug()  << "HubAccount::markHubItemRead: itemMap: " << itemMap;
+
+        retVal = updateHubItem(categoryId, itemId, itemMap, false);
+    }
+
+    return retVal;
+}
+
+bool HubAccount::markHubItemUnread(qint64 categoryId, qint64 itemId)
+{
+    bool retVal = false;
+    qDebug()  << "HubAccount::markHubItemUnread: " << categoryId << " : " << itemId;
+
+    QVariant* item = getHubItem(categoryId, itemId);
+
+    if (item) {
+        QVariantMap itemMap = item->toMap();
+
+        itemMap["readCount"] = 0;
+        itemMap["totalCount"] = 1;
+
+        qDebug()  << "HubAccount::markHubItemUnread: itemMap: " << itemMap;
+
+        retVal = updateHubItem(categoryId, itemId, itemMap, false);
+    }
+
+    return retVal;
+}
+
+void HubAccount::markHubItemsReadBefore(qint64 categoryId, qint64 timestamp)
+{
+    qDebug()  << "HubAccount::markHubItemsReadBefore: " << categoryId << " : " << timestamp;
+
+    QVariantList _items = items();
+    QVariantMap itemMap;
+    qint64 itemId;
+    qint64 itemCategoryId;
+    qint64 itemTime;
+
+    for(int index = 0; index < _items.size(); index++) {
+        itemMap = _items.at(index).toMap();
+        itemId = itemMap["sourceId"].toLongLong();
+        itemCategoryId = itemMap["categoryId"].toLongLong();
+        itemTime = itemMap["timestamp"].toLongLong();
+
+        qDebug()  << "HubAccount::markHubItemUnread: checking itemMap: " << itemId << " : " << itemCategoryId << " : " << itemTime << " : " << itemMap;
+
+        if (itemTime < timestamp && itemCategoryId == categoryId) {
+            itemMap["readCount"] = 1;
+            updateHubItem(itemCategoryId, itemId, itemMap, false);
+            qDebug()  << "HubAccount::markHubItemUnread: marking as read: ";
+        }
+    }
+}
+
+void HubAccount::removeHubItemsBefore(qint64 categoryId, qint64 timestamp)
+{
+    bool retVal = false;
+
+    qDebug()  << "HubAccount::removeHubItemsBefore: " << categoryId << " : " << timestamp;
+
+    QVariantList _items;
+    QVariantMap itemMap;
+    qint64 itemId;
+    qint64 itemCategoryId;
+    qint64 itemTime;
+
+    bool foundItems = false;
+    do {
+        foundItems = false;
+
+        _items = items();
+        for(int index = 0; index < _items.size(); index++) {
+            itemMap = _items.at(index).toMap();
+            itemId = itemMap["sourceId"].toLongLong();
+            itemCategoryId = itemMap["categoryId"].toLongLong();
+            itemTime = itemMap["timestamp"].toLongLong();
+
+            qDebug()  << "HubAccount::removeHubItemsBefore: checking itemMap: " << itemId << " : " << itemCategoryId << " : " << itemTime << " : " << itemMap;
+
+            if (itemTime < timestamp && itemCategoryId == categoryId) {
+                retVal = removeHubItem(itemCategoryId, itemId);
+                if (retVal) {
+                    foundItems = true;
+                    qDebug()  << "HubAccount::removeHubItemsBefore: deleted: ";
+                }
+                break;
+            }
+        }
+    } while (foundItems);
 }
 
 void HubAccount::repopulateHub()

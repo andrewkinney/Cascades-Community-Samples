@@ -41,7 +41,7 @@ public:
      */
     qint64 categoryId();
 
-    void initializeCategories(QStringList categories);
+    void initializeCategories(QVariantList categories);
 
 //public Q_SLOTS:
 

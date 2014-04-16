@@ -161,7 +161,7 @@ void HeadlessHubIntegration::onInvoked(const bb::system::InvokeRequest& request)
 
         qDebug() << "HeadlessHubIntegration: onInvoked: mark prior read : " << timestamp << " : " << request.data();
 
-        markHubItemsReadBefore(timestamp);
+        _testAccount->markHubItemsReadBefore(_testAccount->categoryId(), timestamp);
 
     } else if(request.action().compare("bb.action.DELETE") == 0) {
         qDebug() << "HeadlessHubIntegration: onInvoked: HeadlessHubIntegration : delete" << request.data();
@@ -180,7 +180,7 @@ void HeadlessHubIntegration::onInvoked(const bb::system::InvokeRequest& request)
 
         qDebug() << "HeadlessHubIntegration: onInvoked: mark prior delete : " << timestamp << " : " << request.data();
 
-        removeHubItemsBefore(timestamp);
+        _testAccount->removeHubItemsBefore(_testAccount->categoryId(), timestamp);
 
     } else if(request.action().compare("bb.action.PUSH") == 0) {
         qDebug() << "HeadlessHubIntegration: onInvoked: HeadlessHubIntegration : push";
@@ -198,25 +198,16 @@ void HeadlessHubIntegration::markHubItemRead(QVariantMap itemProperties)
     qDebug()  << "HeadlessHubIntegration::markHubItemRead: item src Id: " << itemProperties["sourceId"].toString();
     qDebug()  << "HeadlessHubIntegration::markHubItemRead: item message Id: " << itemProperties["messageid"].toString();
 
-    QVariant* item;
+    qint64 itemId;
+    qint64 itemCategoryId;
 
     if (itemProperties["sourceId"].toString().length() > 0) {
-        item = _testAccount->getHubItem(_testAccount->categoryId(), itemProperties["sourceId"].toLongLong());
+        itemId = itemProperties["sourceId"].toLongLong();
     } else if (itemProperties["messageid"].toString().length() > 0) {
-        item = _testAccount->getHubItem(_testAccount->categoryId(), itemProperties["messageid"].toLongLong());
+        itemId = itemProperties["messageid"].toLongLong();
     }
 
-    if (item) {
-        QVariantMap itemMap = item->toMap();
-        qDebug()  << "HeadlessHubIntegration::markHubItemRead: itemMap (before): " << itemMap;
-
-        itemMap["readCount"] = 1;
-        itemMap["totalCount"] = 1;
-
-        qDebug()  << "HeadlessHubIntegration::markHubItemRead: itemMap: " << itemMap;
-
-        _testAccount->updateHubItem(itemMap["categoryId"].toLongLong(), itemMap["sourceId"].toLongLong(), itemMap, false);
-    }
+    _testAccount->markHubItemRead(_testAccount->categoryId(), itemId);
 }
 
 void HeadlessHubIntegration::markHubItemUnread(QVariantMap itemProperties)
@@ -226,75 +217,16 @@ void HeadlessHubIntegration::markHubItemUnread(QVariantMap itemProperties)
     qDebug()  << "HeadlessHubIntegration::markHubItemUnread: item src Id: " << itemProperties["sourceId"].toString();
     qDebug()  << "HeadlessHubIntegration::markHubItemUnread: item message Id: " << itemProperties["messageid"].toString();
 
-    QVariant* item;
+    qint64 itemId;
+    qint64 itemCategoryId;
 
     if (itemProperties["sourceId"].toString().length() > 0) {
-        item = _testAccount->getHubItem(_testAccount->categoryId(), itemProperties["sourceId"].toLongLong());
+        itemId = itemProperties["sourceId"].toLongLong();
     } else if (itemProperties["messageid"].toString().length() > 0) {
-        item = _testAccount->getHubItem(_testAccount->categoryId(), itemProperties["messageid"].toLongLong());
+        itemId = itemProperties["messageid"].toLongLong();
     }
 
-    if (item) {
-        QVariantMap itemMap = item->toMap();
-        qDebug()  << "HeadlessHubIntegration::markHubItemUnread: itemMap (before): " << itemMap;
-
-        itemMap["readCount"] = 0;
-        itemMap["totalCount"] = 1;
-
-        qDebug()  << "HeadlessHubIntegration::markHubItemUnread: itemMap: " << itemMap;
-
-        _testAccount->updateHubItem(itemMap["categoryId"].toLongLong(), itemMap["sourceId"].toLongLong(), itemMap, false);
-    }
-}
-
-void HeadlessHubIntegration::markHubItemsReadBefore(qint64 timestamp)
-{
-    qDebug()  << "HeadlessHubIntegration::markHubItemsReadBefore: timestamp: " << timestamp;
-
-    QVariantList itemMaps = _testAccount->items();
-    QString sourceId;
-    qint64 itemTime;
-    int index = 0;
-
-    for(index = 0; index < itemMaps.size(); index++) {
-        QVariantMap itemMap(itemMaps.at(index).toMap());
-        sourceId = itemMap["sourceId"].toString();
-        itemTime = itemMap["timestamp"].toLongLong();
-
-        if (itemTime < timestamp) {
-            itemMap["readCount"] = 1;
-            _testAccount->updateHubItem(itemMap["categoryId"].toLongLong(), itemMap["sourceId"].toLongLong(), itemMap, false);
-        }
-    }
-}
-
-void HeadlessHubIntegration::removeHubItemsBefore(qint64 timestamp)
-{
-    qDebug()  << "HeadlessHubIntegration::removeHubItemsBefore: timestamp: " << timestamp;
-
-    QVariantList itemMaps = _testAccount->items();
-    QVariantMap itemMap;
-    QString sourceId;
-    qint64 itemTime;
-    int index = 0;
-
-    bool foundItems = false;
-    do {
-        foundItems = false;
-
-        itemMaps = _testAccount->items();
-        for(index = 0; index < itemMaps.size(); index++) {
-            itemMap = itemMaps.at(index).toMap();
-            sourceId = itemMap["sourceId"].toString();
-            itemTime = itemMap["timestamp"].toLongLong();
-
-            if (itemTime < timestamp) {
-                _testAccount->removeHubItem(itemMap["categoryId"].toLongLong(), itemMap["sourceId"].toLongLong());
-                foundItems = true;
-                break;
-            }
-        }
-    } while (foundItems);
+    _testAccount->markHubItemUnread(_testAccount->categoryId(), itemId);
 }
 
 void HeadlessHubIntegration::removeHubItem(QVariantMap itemProperties)
@@ -304,11 +236,14 @@ void HeadlessHubIntegration::removeHubItem(QVariantMap itemProperties)
     qDebug()  << "HeadlessHubIntegration::removeHubItem: item src Id: " << itemProperties["sourceId"].toString();
     qDebug()  << "HeadlessHubIntegration::removeHubItem: item message Id: " << itemProperties["messageid"].toString();
 
+    qint64 itemId;
     if (itemProperties["sourceId"].toString().length() > 0) {
-        _testAccount->removeHubItem(_testAccount->categoryId(), itemProperties["sourceId"].toLongLong());
+        itemId = itemProperties["sourceId"].toLongLong();
     } else if (itemProperties["messageid"].toString().length() > 0) {
-        _testAccount->removeHubItem(_testAccount->categoryId(), itemProperties["messageid"].toLongLong());
+        itemId = itemProperties["messageid"].toLongLong();
     }
+
+    _testAccount->removeHubItem(_testAccount->categoryId(), itemId);
 }
 
 void HeadlessHubIntegration::processNewMessage(QByteArray message) {

@@ -56,10 +56,8 @@ public:
 private slots:
 	void processNewMessage(QByteArray message);
     void markHubItemRead(QVariantMap itemProperties);
-    void markHubItemsReadBefore(qint64 timestamp);
     void markHubItemUnread(QVariantMap itemProperties);
     void removeHubItem(QVariantMap itemProperties);
-    void removeHubItemsBefore(qint64 timestamp);
 
 private:
 	PushManager *_pushManager; //Handle all push interactions

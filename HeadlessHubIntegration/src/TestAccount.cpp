@@ -55,8 +55,16 @@ TestAccount::TestAccount(UDSUtil* udsUtil, HubCache* hubCache) : HubAccount(udsU
 
     initialize();
 
-    QStringList categories;
-    categories << QString("Inbox");
+    QVariantList categories;
+    QVariantMap category;
+    category["categoryId"] = 1; // categories are created with sequential category Ids starting at 1 so number your predefined categories
+                                // accordingly
+    category["name"] = "Inbox";
+    category["parentCategoryId"] = 0; // default parent category ID for root categories
+    categories << category;
+    category["name"] = "Deleted";
+    category["parentCategoryId"] = 0; // default parent category ID for root categories
+    categories << category;
     initializeCategories(categories);
 
     // reload existing hub items if required
@@ -81,14 +89,14 @@ qint64 TestAccount::categoryId()
     return _categoryId;
 }
 
-void TestAccount::initializeCategories(QStringList newCategories)
+void TestAccount::initializeCategories(QVariantList newCategories)
 {
     HubAccount::initializeCategories(newCategories);
 
     if (_categoriesInitialized) {
-        // initialize category ID
-        QVariantMap categories = _hubCache->categories();
+        // initialize category ID - we are assuming that we only added one category
+        QVariantList categories = _hubCache->categories();
 
-        _categoryId = categories[newCategories[0]].toLongLong();
+        _categoryId = categories[0].toMap()["categoryId"].toLongLong();
     }
 }

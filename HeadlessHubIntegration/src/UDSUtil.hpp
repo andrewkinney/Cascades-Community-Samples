@@ -135,23 +135,25 @@ public:
     /*
      *   Add a new category to an existing UDS account.
      *
-     *   @param accountId   - account ID
-     *   @param name        - category name
+     *   @param accountId        - account ID
+     *   @param name             - category name
+     *   @param parentCategoryId - parent categoryId ID
      *
      *  @returns qint64 categoryId of new category or -1 if failed
      */
-    Q_INVOKABLE qint64 addCategory(qint64 accountId, QString name);
+    Q_INVOKABLE qint64 addCategory(qint64 accountId, QString name, qint64 parentCategoryId);
 
     /*
      *   Update an existing UDS account category.
      *
-     *   @param accountId   - account ID
-     *   @param categoryId   - category ID
-     *   @param name        - category name
+     *   @param accountId        - account ID
+     *   @param categoryId       - category ID
+     *   @param name             - category name
+     *   @param parentCategoryId - parent categoryId ID
      *
      *  @returns bool true if operation successfal, false if not
      */
-    Q_INVOKABLE bool updateCategory(qint64 accountId, qint64 categoryId, QString name);
+    Q_INVOKABLE bool updateCategory(qint64 accountId, qint64 categoryId, QString name, qint64 parentCategoryId);
 
     /*
      *   Remove a category from a UDS account.

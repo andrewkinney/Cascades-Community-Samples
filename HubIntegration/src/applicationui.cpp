@@ -90,6 +90,8 @@ void ApplicationUI::onInvoked(const bb::system::InvokeRequest& request)
 	qDebug() << "HubIntegration: onInvoked: Hub Integration was invoked";
 
 	if(request.action().compare("bb.action.COMPOSE") == 0) {
+        qDebug() << "HubIntegration: onInvoked: compose item: " << request.data();
+
 	    // Create scene document from main.qml asset, the parent is set
 	    // to ensure the document gets destroyed properly at shut down.
 	    _pageQml = QmlDocument::create("asset:///compose.qml").parent(this);
@@ -101,7 +103,7 @@ void ApplicationUI::onInvoked(const bb::system::InvokeRequest& request)
 
 	} else
 	if(request.action().compare("bb.action.VIEW") == 0) {
-		qDebug() << "HubIntegration: onInvoked: view item" << request.data();
+		qDebug() << "HubIntegration: onInvoked: view item: " << request.data();
 
 	    // Create scene document from main.qml asset, the parent is set
 	    // to ensure the document gets destroyed properly at shut down.
@@ -122,8 +124,8 @@ void ApplicationUI::onInvoked(const bb::system::InvokeRequest& request)
 			QString sourceId = item["messageid"].toString();
 			qDebug() << "HubIntegration: onInvoked: found item" << item;
 
-			if (item["messageid"].toString() == itemMap["messageid"].toString() ||
-				item["sourceId"].toString() == itemMap["messageid"].toString()) {
+			if (item["sourceId"].toString() == itemMap["messageid"].toString() ||
+				item["sourceId"].toString() == itemMap["sourceId"].toString()) {
 				qDebug() << "HubIntegration: onInvoked: page " << _page;
 				Container *container = _page->findChild<Container*>("container");
 				qDebug() << "HubIntegration: onInvoked: container " << container;

@@ -27,7 +27,7 @@ Q_PROPERTY(int accountId READ accountId WRITE setAccountId)
 Q_PROPERTY(QString accountName READ accountName WRITE setAccountName)
 
 Q_PROPERTY(int lastCategoryId READ lastCategoryId)
-Q_PROPERTY(QVariantMap categories READ categories WRITE setCategories)
+Q_PROPERTY(QVariantList categories READ categories WRITE setCategories)
 
 Q_PROPERTY(int lastItemId READ lastItemId)
 Q_PROPERTY(QVariantList items READ items WRITE setItems)
@@ -67,11 +67,11 @@ public:
 	qint64       lastCategoryId();
 
     /*
-     * Map of categories.
+     * List of categories.
      *
-     * @returns QVariantMap last map of categories
+     * @returns QVariantList current list of categories
      */
-	QVariantMap categories();
+	QVariantList categories();
 
     /*
      * Last item ID of data in the cache
@@ -124,11 +124,11 @@ public Q_SLOTS:
 	void setAccountName(QString accountName);
 
     /*
-     * Replace map of categories in the cache with the provided map.
+     * Replace list of categories in the cache with the provided list.
      *
-     * @param categories - new map of categories
+     * @param categories - new list of categories
      */
-	void setCategories(QVariantMap categories);
+	void setCategories(QVariantList categories);
 
     /*
      * Add a new item in the cache using the provided data.
@@ -174,7 +174,7 @@ private:
 	int          _accountId;
 	QString      _accountName;
 
-	QVariantMap _categories;
+	QVariantList _categories;
 
 	int          _lastItemId;
 	QVariantList _items;

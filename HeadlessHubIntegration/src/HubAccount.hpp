@@ -50,7 +50,7 @@ public:
      *
      * @param categories - list of category names to create
      */
-    virtual void initializeCategories(QStringList categories);
+    virtual void initializeCategories(QVariantList categories);
 
     /*
      *  Remove the Hub account.
@@ -63,7 +63,7 @@ public Q_SLOTS:
      *
      * @returns QVariantMap - categories for this account
      */
-	QVariantMap categories();
+    QVariantList categories();
 
     /*
      * Get Hub item by itemId from the cache.
@@ -124,6 +124,40 @@ public Q_SLOTS:
      * @param itemId - ID of the item to be deleted
      */
     bool removeHubItem(qint64 categoryId, qint64 itemId);
+
+    // convenience functions for common Hub operations
+    /*
+     * Mark the specified item from the cache as read.
+     *
+     * @param categoryId - category ID
+     * @param itemId - ID of the item to be marked as read
+     */
+    bool markHubItemRead(qint64 categoryId, qint64 itemId);
+
+    /*
+     * Mark the specified item from the cache as unread.
+     *
+     * @param categoryId - category ID
+     * @param itemId - ID of the item to be marked as unread
+     */
+    bool markHubItemUnread(qint64 categoryId, qint64 itemId);
+
+    /*
+     * Mark the items from the cache, older than the timestamp provided, as read.
+     *
+     * @param categoryId - category ID
+     * @param timestamp - timestamp before items are to be marked as read
+     */
+    void markHubItemsReadBefore(qint64 categoryId, qint64 timestamp);
+
+    /*
+     * Delete the items from the cache that are older than the timestamp provided..
+     *
+     * @param categoryId - category ID
+     * @param timestamp - timestamp before items are to be marked as read
+     */
+    void removeHubItemsBefore(qint64 categoryId, qint64 timestamp);
+
 
 	void repopulateHub();
 
