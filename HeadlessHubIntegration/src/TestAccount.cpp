@@ -62,9 +62,6 @@ TestAccount::TestAccount(UDSUtil* udsUtil, HubCache* hubCache) : HubAccount(udsU
     category["name"] = "Inbox";
     category["parentCategoryId"] = 0; // default parent category ID for root categories
     categories << category;
-    category["name"] = "Deleted";
-    category["parentCategoryId"] = 0; // default parent category ID for root categories
-    categories << category;
     initializeCategories(categories);
 
     // reload existing hub items if required
