@@ -58,6 +58,28 @@ Although this sample is push based, it is relatively simple to convert it a sync
 - call processNewMessage() or an equivalent function that operates in a similar way to add the item to the Hub
 - remove the push invocation handling code and push targets from the bar descriptor of both projects
 
+Additional customizations when integrating with your own app:
+
+HeadlessHubIntegration:
+
+- TestAccount - Review this class, derived from HubAccount, and substitute it with your own version of this class 
+                customized for your app's account
+- HubAccount - contains various methods for managing a Hub account and its items (most developers do not need to change this)
+- HeadlessHubIntegration - modify UDSUtil initialization parameters to ensure your service name is unique and the 
+                           proper hub assets folder name in the UI app is provided
+- UDSUtil - a Qt wrapper around the native UDS library to simplify UDS operations
+- HubCache - a class that implements a simple Hub cache using QSettings (feel free to substitute this with your own
+             class to implement a cache via another mechanism such as SQLLite database caching if you need better performance)
+- PushManager - a utility class for processing push data
+
+Hub Integration:
+- look at this sample for guidance on what to add to your app to add the cards needed for proper Hub integration
+- bar descriptor 
+	- modify the invocation targets to match the names defined in TestAccount or your equivalent class
+	- modify the hub item MIME type in the invocation target definitions to match the MIME type defined in TestAccount 
+	  or your equivalent class
+	- keep in mind that the headless app launches first to prompt for permissions.  Please change its name so that it looks like it
+	  belongs to your app to avoid user confusion
 
 For more information about our other Open Source projects, visit:
 
