@@ -26,7 +26,3 @@
 169.254.0.1
 
 -_site/*
-HeadlessHubIntegration/config.pri
-HeadlessHubIntegration/translations/HeadlessHubIntegration.ts
-HubIntegration/config.pri
-HubIntegration/translations/HubIntegration.ts
