@@ -24,8 +24,17 @@
 
 using namespace bb::pim::account;
 
+static const int UDS_TIMEOUT = 30*1000; // 30 seconds
+
 UDSUtil::UDSUtil(QString serviceURL, QString hubAssetsFolderName) :
-       _nextAccountId(0), _nextCategoryId(0), _nextItemId(0), _async(false), _isRegistrationSuccess(false), _reloadHub(false) {
+      _udsHandle(0),
+      _nextAccountId(0),
+      _nextCategoryId(0),
+      _nextItemId(0),
+      _async(true),  // the account creation will be done asynchronously
+      _isRegistrationSuccess(false),
+      _reloadHub(false)
+{
 
     qDebug() << "UDSUtil::UDSUtil: " << serviceURL << " : " << hubAssetsFolderName;
 
@@ -66,12 +75,16 @@ void UDSUtil::initialize() {
             qDebug() << "UDSUtil::initialize: uds_register_client call return code indicates Hub reload required.";
         }
 
-        retVal = uds_wait_for_response(_udsHandle, 300000);
+        qDebug() << "Waiting for register uds response...";
+        retVal = uds_wait_for_response(_udsHandle, UDS_TIMEOUT);
         if (_async) {
             retVal = uds_get_response(_udsHandle);
             if (retVal == 0) {
                 serviceId = uds_get_service_id(_udsHandle);
                 status = uds_get_service_status(_udsHandle);
+            } else {
+                qCritical() << "Response uds_get_response failed with error " << retVal;
+                Q_ASSERT(0);
             }
         } else {
             if (retVal == 0) {
@@ -137,19 +150,12 @@ qint64 UDSUtil::addAccount(QString name, QString displayName, QString serverName
 						QString icon, QString lockedIcon, QString composeIcon, QString desc,
 						bool compose, uds_account_type_t type)
 {
-    int retCode = -1;
-    uds_account_key_t accountId;
     char accountName[256];
     char targetName[256];
     char iconName[256];
     char lockedIconName[256];
     char composeIconName[256];
     char description[256];
-
-    Account act;
-    AccountService accountService;
-    QString s;
-    char *p = 0;
 
     if (!_isRegistrationSuccess) {
         qCritical() << "UDSUtil::addAccount: not registered yet\n";
@@ -170,25 +176,27 @@ qint64 UDSUtil::addAccount(QString name, QString displayName, QString serverName
     strncpy(description, desc.toUtf8().data(), 255);
 
 	// check for existing account and use that accountID as a starting point
-	QList<Account> allAccounts;
-	do {
-		allAccounts = accountService.accounts();
-		qDebug() <<  "UDSUtil::addAccount: # accounts: " << allAccounts.length();
+    AccountService accountService;
+	QList<Account> allAccounts = accountService.accounts();
+	qDebug() <<  "UDSUtil::addAccount: # accounts: " << allAccounts.length();
+	int count = 0;
 
-		if (allAccounts.length() > 0) {
-		   for(int index = 0; index < allAccounts.length(); index++) {
-			   Account account = allAccounts.at(index);
+	foreach (Account account, allAccounts) {
+		count++;
+		qDebug() << "Account: " << count << " : "
+			   << account.id() << " : "
+			   << account.displayName() << " : "
+			   << account.isExternalData() << " : "
+			   << account.provider().id();
 
-			   //char *accountName = (char *)account.displayName().toUtf8().constData();
-			   qDebug() << "UDSUtil: addAccount: account " << index << " : " << accountName << account.isServiceSupported(Service::Messages) << " : " << account.provider().id();
-
-			   if (account.isServiceSupported(Service::Messages) && account.displayName() == displayName && account.provider().id() == "external") {
-				   _nextAccountId = account.id();
-				   qDebug() << "UDSUtil: addAccount: found existing account " << _nextAccountId;
-			   }
-			}
+		if (account.isExternalData()
+			   && account.displayName() == displayName
+			   && account.provider().id() == "external") {
+		   _nextAccountId = account.id();
+		   qDebug() << "Found existing account " << _nextAccountId;
+		   break;
 		}
-	} while (allAccounts.length() == 0);
+	}
 
     // create the message service account
 	if (_nextAccountId == 0) {
@@ -199,25 +207,15 @@ qint64 UDSUtil::addAccount(QString name, QString displayName, QString serverName
 		account.setSettingsValue("server", serverName);
 		account.setDisplayName(displayName);
 		Result r = accountService.createAccount(provider.id(), account);
-		if (!r.isSuccess())
-		{
-			s = r.message();
-			p = s.toUtf8().data();
-			qCritical() << "UDSUtil::addAccount: account create failed !"<<s<<p<<account.isValid();
-			act = Account();
-		}
-		else
-		{
-			// Was successful, so lets get the account id
-			AccountKey id = account.id();
-			qDebug() << "UDSUtil::addAccount: account created with id "<<id<<account.isValid();
-			act = account;
-		}
 
-		if( act.isValid() ){
-			_nextAccountId = act.id();
-		}else{
-			_nextAccountId = 0;
+		if (r.isSuccess()) {
+			_nextAccountId = account.id();
+			qDebug() << "AccountService::createAccount() - id: " << _nextAccountId << " isValid: " << account.isValid();
+		} else {
+			qCritical() << "AccountService::createAccount() failed - code: " << r.errorCode()
+					<< " msg: " << r.message() << " isValid: "<< account.isValid();
+			Q_ASSERT(0);
+			return -1;
 		}
     }
 
@@ -233,22 +231,28 @@ qint64 UDSUtil::addAccount(QString name, QString displayName, QString serverName
     uds_account_data_set_type(accountData, type);
     uds_account_data_set_target_name(accountData, targetName);
 
-    if (0 != (retCode = uds_account_added(_udsHandle, accountData))) {
-        qCritical() << "UDSUtil::addAccount:  uds_account_added failed with error " << retCode << " for account: " << name << "\n";
-        accountId = -1;
+    uds_account_key_t accountId = -1;
+    int rc = uds_account_added(_udsHandle, accountData);
+    if (rc != UDS_SUCCESS) {
+        qCritical() << "uds_account_added: failed with error: " << rc << " for account: " << name;
     } else {
-        if (_nextAccountId == 0) {
-            _nextAccountId++;
-        }
-    	accountId = _nextAccountId;
-        //mapAccount[name] = uds_account_data_get_id(accountData);
-        qDebug() << "UDSUtil::addAccount: account: " << name << ": added, id" << QString::number(_nextAccountId);
-        _nextAccountId++;
+    	if (_async) {
+			qDebug() << "uds_account_added: waiting...";
+    		if (uds_wait_for_response(_udsHandle, UDS_TIMEOUT)) {
+    	        rc = uds_get_response(_udsHandle);
+    	        if (rc != UDS_SUCCESS) {
+    	            qCritical() << "uds_get_response: failed with error: " << rc << " for account: " << name;
+    	        }
+    		} else {
+	            qCritical() << "uds_wait_for_response: failed for account: " << name;
+    		}
+    	}
     }
 
-    if (_async) {
-        retCode = uds_get_response(_udsHandle);
-    }
+	if (rc == UDS_SUCCESS) {
+		accountId = _nextAccountId;
+		qDebug() << "uds_account_added() - success: " << name << ": id: " << QString::number(_nextAccountId);
+	}
 
     uds_account_data_destroy(accountData);
 
@@ -301,16 +305,25 @@ bool UDSUtil::updateAccount(qint64 accountId, QString name, QString target,
     uds_account_data_set_type(accountData, type);
     uds_account_data_set_target_name(accountData, targetName);
 
-    if (0 != uds_account_updated(_udsHandle, accountData)) {
-        qCritical() << "UDSUtil::updateAccount: uds_account_updated failed with error " << retVal << " for account: " << name << "\n";
-        retVal = false;
+    int rc = uds_account_updated(_udsHandle, accountData);
+    if (rc != UDS_SUCCESS) {
+        qCritical() << "uds_account_updated: failed with error " << rc << " for account: " << name;
     } else {
-        qDebug() << "UDSUtil::updateAccount: account: " << accountId << " updated";
-        retVal = true;
+        if (_async) {
+			qDebug() << "uds_account_updated: waiting...";
+        	if (uds_wait_for_response(_udsHandle, UDS_TIMEOUT)) {
+        		rc = uds_get_response(_udsHandle);
+
+        	    if (rc != UDS_SUCCESS) {
+        	        qCritical() << "uds_get_response: failed with error " << rc << " for account: " << name;
+        	    }
+        	}
+        }
     }
 
-    if (_async) {
-        retVal = uds_get_response(_udsHandle);
+    if (rc == UDS_SUCCESS) {
+		qDebug() << "uds_account_updated: " << accountId;
+		retVal = true;
     }
 
     uds_account_data_destroy(accountData);
@@ -318,111 +331,97 @@ bool UDSUtil::updateAccount(qint64 accountId, QString name, QString target,
     return retVal;
 }
 
-bool UDSUtil::removeAccount(qint64 accountId) {
-    bool retVal = true;
+bool UDSUtil::removeAccount(qint64 accountId)
+{
+	bool success = false;
 
     if (!_isRegistrationSuccess) {
-        qCritical() << "UDSUtil::removeAccount: not registered yet\n";
-        return retVal;
-    }
-
-    if (accountId <= 0) {
-        qCritical() << "UDSUtil::removeAccount: invalid parameters\n";
-        return retVal;
-    }
-
-    if (0 != (uds_account_removed(_udsHandle, accountId))) {
-        qCritical() << "UDSUtil::removeAccount: uds_account_removed for " << " + accountId "
-        		"+ " << " failed with error " << retVal << "\n";
-        retVal = false;
+        qCritical() << "Not registered yet";
+    } else if (accountId <= 0) {
+    	qCritical() << "Invalid parameters";
     } else {
-    	qDebug() << "UDSUtil::removeAccount: account " << accountId << " removed";
-    	retVal = true;
-    }
+		qint64 rc = uds_account_removed(_udsHandle, accountId);
 
-    if (_async) {
-        retVal = uds_get_response(_udsHandle);
-    }
-
-    return retVal;
-}
-
-void UDSUtil::cleanupAccountsExcept(const qint64 accountId, const QString& name)
-{
-	qDebug() << "UDSUtil::cleanupAccountsExcept : name : " << name << " : accountId: " << accountId;
-
-	int accRemoved = 0;
-
-	if (accountId != -1) {
-		QString s;
-		char *p = 0;
-
-		Account act;
-		AccountService accountService;
-
-		QString providerId("external");
-		const Provider provider = accountService.provider(providerId);
-
-		QList<Account> allAccounts;
-		do {
-			allAccounts = accountService.accounts();
-			qDebug() <<  "UDSUtil::cleanupAccountsExcept: # accounts: " << allAccounts.length();
-
-			if (allAccounts.length() > 0) {
-				//JsonDataAccess jda;
-
-
-			   for(int index = 0; index < allAccounts.length(); index++) {
-				   Account account = allAccounts.at(index);
-				   QByteArray rawBuffer;
-
-				   if (account.displayName() == name) {
-					   qDebug() << "UDSUtil: cleanupAccountsExcept: account " << index
-							   << "\n : Account ID: " << account.id()
-							   << "\n : Account Name: " << account.displayName()
-							   << "\n : Invoke Target:  " <<  account.externalSetupInvokeTarget()
-							   << "\n : Messages supported: " << account.isServiceSupported(Service::Messages)
-							   << "\n : Provider ID: " << account.provider().id();
-
-					   qint64 accId = account.id();
-
-						if (accId != accountId) {
-							removeAccount(accId);
-
-							Result r = accountService.deleteAccount(accId);
-							qDebug() << "UDSUtil::cleanupAccountsExcept : Removing account...";
-							if (!r.isSuccess())
-							{
-								s = r.message();
-								p = s.toUtf8().data();
-								qCritical() << "UDSUtil::cleanupAccountsExcept : account remove failed !"<<s<<p<<account.isValid();
-								act = Account();
-							}
-							else
-							{
-								// Was successful, so lets get the account id
-								qDebug() << "UDSUtil::cleanupAccountsExcept: account with id "<<accId<< " removed";
-								act = account;
-								accRemoved++;
-							}
-						}
-				   }
+		if (rc != UDS_SUCCESS) {
+			qCritical() << "uds_account_removed: failed to remove " << accountId << " with error " << rc;
+		} else {
+			if (_async) {
+				qDebug() << "uds_account_removed: waiting...";
+				if (uds_wait_for_response(_udsHandle, UDS_TIMEOUT)) {
+					rc = uds_get_response(_udsHandle);
+					if (rc != UDS_SUCCESS) {
+						qCritical() << "uds_get_response: failed for " << accountId << " with error " << rc;
+					}
+				} else {
+					qCritical() << "uds_wait_for_response: failed for " << accountId;
 				}
 			}
+		}
 
-			// in case service does not start up right away, retry until it becomes available
-			//usleep(5000);
-		} while (allAccounts.length() == 0);
-	} else {
-		qCritical() << "UDSUtil::cleanupAccountsExcept : No account id, aborting.";
-	}
+		if (rc == UDS_SUCCESS) {
+			qDebug() << "uds_account_removed: " << accountId << " removed";
+			success = true;
+		}
+    }
 
-	qDebug() << "UDSUtil::cleanupAccountsExcept: Accounts Removed: " << accRemoved;
+    return success;
 }
 
-qint64 UDSUtil::addCategory(qint64 accountId, QString name, qint64 parentCategoryId = 0) {
+bool UDSUtil::cleanupAccountsExcept(const qint64 accountId, const QString& name)
+{
+	bool success = true;
+	qDebug() << "Cleanup Account: name : " << name << " : accountId: " << accountId;
+
+	AccountService accountService;
+	QString providerId("external");
+	const Provider provider = accountService.provider(providerId);
+	QList<Account> allAccounts = accountService.accounts();
+
+	qDebug() <<  "cleanup accounts: " << allAccounts.length();
+
+	int accRemoved = 0;
+	foreach(Account account, allAccounts) {
+		if (account.displayName() == name) {
+			qDebug() << "Account: " << account.id()
+				   << " : " << account.displayName()
+				   << " : " << account.externalSetupInvokeTarget()
+				   << " : " << account.isExternalData()
+				   << " : " << account.provider().id();
+
+			qint64 accId = account.id();
+
+			if (accId != accountId) {
+				// remove the associated hub account
+				bool hubRemoved = removeAccount(accId);
+				if (!hubRemoved) {
+					qCritical() << "Failed to remove Hub Account: " << accId;
+					success = false;
+				}
+
+				// remove the PIM account
+				Result r = accountService.deleteAccount(accId);
+				qDebug() << "Removing PIM account... " << accId;
+				if (r.isSuccess()) {
+					qDebug() << "PIM account with id " << accId << " removed";
+					accRemoved++;
+				} else {
+					qCritical() << "PIM account remove failed: code: " << r.errorCode() << " msg: " << r.message() << " isValid: " << account.isValid();
+					success = false;
+				}
+			}
+		}
+	}
+
+	if (accRemoved > 1) {
+		qCritical() << "There was more than 1 account removed: " << accRemoved;
+	}
+
+	return success;
+}
+
+qint64 UDSUtil::addCategory(qint64 accountId, QString name, qint64 parentCategoryId = 0)
+{
     int retVal = -1;
-    int retCode = 0;
     char categoryName[256];
 
     if (!_isRegistrationSuccess) {
@@ -444,33 +443,37 @@ qint64 UDSUtil::addCategory(qint64 accountId, QString name, qint64 parentCategor
     uds_category_data_set_account_id(category, accountId);
     uds_category_data_set_name(category, categoryName);
 
-    if (0 != (retCode = uds_category_added(_udsHandle, category))) {
-        qCritical() << "UDSUtil::addCategory: uds_category_added failed for  " << categoryName << " with error " << retCode << "\n";
-        retVal = -1;
+    int rc = uds_category_added(_udsHandle, category);
+    if (rc != UDS_SUCCESS) {
+    	qCritical() << "uds_category_added: failed for " << categoryName << " with error " << rc;
     } else {
-        qDebug() << "UDSUtil::addCategory: category: " << name << ": added";
-        retVal = _nextCategoryId;
-        _nextCategoryId++;
+    	if (_async) {
+    		qDebug() << "uds_category_added: waiting...";
+    		if (uds_wait_for_response(_udsHandle, UDS_TIMEOUT)) {
+				rc = uds_get_response(_udsHandle);
+				if (rc != UDS_SUCCESS) {
+					qCritical() << "uds_get_response: failed for " << categoryName << " with error " << rc;
+				}
+    	    } else {
+    	    	qCritical() << "uds_wait_for_response: failed for " << categoryName << " with error " << rc;
+    	    }
+    	}
     }
 
-    if (_async) {
-        retVal = uds_get_response(_udsHandle);
-        if (retVal == 0) {
-            retVal = _nextCategoryId;
-            _nextCategoryId++;
-        } else {
-        	retVal = 0;
-        }
-    }
+	if (rc == UDS_SUCCESS) {
+    	qDebug() << "uds_category_added: " << name << " id: " << _nextCategoryId;
+		retVal = _nextCategoryId;
+		_nextCategoryId++;
+	}
 
     uds_category_data_destroy(category);
 
     return retVal;
 }
 
-bool UDSUtil::updateCategory(qint64 accountId, qint64 categoryId, QString name, qint64 parentCategoryId = 0) {
-    bool retVal = true;
-    int retCode = 0;
+bool UDSUtil::updateCategory(qint64 accountId, qint64 categoryId, QString name, qint64 parentCategoryId = 0)
+{
+    bool retVal = false;
     char categoryName[256];
 
     if (!_isRegistrationSuccess) {
@@ -492,25 +495,36 @@ bool UDSUtil::updateCategory(qint64 accountId, qint64 categoryId, QString name, 
     uds_category_data_set_account_id(category, accountId);
     uds_category_data_set_name(category, categoryName);
 
-
-    if (0 != (retCode = uds_category_updated(_udsHandle, category))) {
-        qCritical() << "UDSUtil::updateCategory: uds_category_updated failed for " << name << " with error "<< retCode << "\n";
-        retVal = false;
+    int rc = uds_category_updated(_udsHandle, category);
+    if (rc != UDS_SUCCESS) {
+        qCritical() << "uds_category_updated: failed for " << name << " with error "<< rc;
     } else {
-        qDebug() << "UDSUtil::updateCategory: category: " << categoryId << ": updated";
-
-        retVal = true;
+        if (_async) {
+        	qDebug() << "uds_category_updated: waiting...";
+        	if (uds_wait_for_response(_udsHandle, UDS_TIMEOUT)) {
+				rc = uds_get_response(_udsHandle);
+				if (rc != UDS_SUCCESS) {
+					qCritical() << "uds_get_response: failed for " << name << " with error "<< rc;
+				}
+        	} else {
+				qCritical() << "uds_wait_for_response: failed for " << name;
+        	}
+        }
     }
 
-    if (_async) {
-        retVal = uds_get_response(_udsHandle);
+    if (rc == UDS_SUCCESS) {
+		qDebug() << "uds_category_updated: " << categoryId << ": updated";
+		retVal = true;
     }
+
+    uds_category_data_destroy(category);
 
     return retVal;
 }
 
-bool UDSUtil::removeCategory(qint64 accountId, qint64 categoryId) {
-    bool retVal = true;
+bool UDSUtil::removeCategory(qint64 accountId, qint64 categoryId)
+{
+    bool retVal = false;
 
     if (!_isRegistrationSuccess) {
         qCritical() << "UDSUtil::removeCategory: not registered yet\n";
@@ -522,16 +536,27 @@ bool UDSUtil::removeCategory(qint64 accountId, qint64 categoryId) {
         return retVal;
     }
 
-    if (0 != (uds_category_removed(_udsHandle, accountId, categoryId))) {
-    	qCritical() << "UDSUtil::removeCategory:: uds_category_removed failed with error " << retVal << "\n";
-    	retVal = false;
+    int rc = uds_category_removed(_udsHandle, accountId, categoryId);
+    if (rc != UDS_SUCCESS) {
+    	qCritical() << "uds_category_removed: failed with error " << rc << " for category: " << categoryId;
     } else {
-    	qDebug() << "UDSUtil::removeCategory: category: " << categoryId << ": removed";
-    	retVal = true;
+        if (_async) {
+        	qDebug() << "uds_category_removed: waiting...";
+        	if (uds_wait_for_response(_udsHandle, UDS_TIMEOUT)) {
+        		rc = uds_get_response(_udsHandle);
+
+        	    if (rc != UDS_SUCCESS) {
+        	    	qCritical() << "uds_get_response: failed with error " << rc << " for category: " << categoryId;
+        	    }
+        	} else {
+            	qCritical() << "uds_wait_for_response: failed for category: " << categoryId;
+        	}
+        }
     }
 
-    if (_async) {
-        retVal = uds_get_response(_udsHandle);
+    if (rc == UDS_SUCCESS) {
+		qDebug() << "UDSUtil::removeCategory: category: " << categoryId << ": removed";
+		retVal = true;
     }
 
     return retVal;
@@ -539,9 +564,9 @@ bool UDSUtil::removeCategory(qint64 accountId, qint64 categoryId) {
 
 qint64 UDSUtil::addItem(qint64 accountId, qint64 categoryId, QVariantMap &itemMap, QString name, QString subject, QString mimeType,
                         QString icon, bool read, QString syncId, QString userData, QString extendedData,
-					    long long timestamp, unsigned int contextState, bool notify) {
+					    long long timestamp, unsigned int contextState, bool notify)
+{
     int retVal = -1;
-    int retCode = -1;
     char sourceId[256];
     char itemName[256];
     char subjectDesc[256];
@@ -617,34 +642,47 @@ qint64 UDSUtil::addItem(qint64 accountId, qint64 categoryId, QVariantMap &itemMa
     itemMap["accountId"] = accountId;
     itemMap["categoryId"] = categoryId;
 
-    if (0 != (retCode = uds_item_added(_udsHandle, inbox_item))) {
-        qCritical() << "UDSUtil::addItem: uds_item_added failed for " << name << " with error "<< retCode << "\n";
-        retVal = 0;
+    qDebug() << itemMap;
+
+    int rc = uds_item_added(_udsHandle, inbox_item);
+    if (rc != UDS_SUCCESS) {
+        qCritical() << "uds_item_added: failed for " << name << " with error "<< rc;
     } else {
-        qDebug() << "UDSUtil::addItem: item: " << itemMap << ": added";
+        if (_async) {
+        	qDebug() << "uds_item_added: waiting...";
+        	if (uds_wait_for_response(_udsHandle, UDS_TIMEOUT)) {
+				rc = uds_get_response(_udsHandle);
+
+				if (rc != UDS_SUCCESS) {
+					qCritical() << "uds_get_response: failed for " << name << " with error "<< rc;
+				}
+        	} else {
+                qCritical() << "uds_wait_for_response: failed for " << name;
+        	}
+        }
+    }
+
+    if (rc == UDS_SUCCESS) {
+        qDebug() << "uds_item_added: " << itemMap;
         retVal = _nextItemId;
         _nextItemId++;
     }
 
-    if (_async) {
-        retVal = uds_get_response(_udsHandle);
-        if (retVal == 0) {
-            retVal = _nextItemId;
-            _nextItemId++;
-        } else {
-        	retVal = 0;
-        }
-    }
     uds_inbox_item_data_destroy(inbox_item);
+
+    qDebug() << "Next item ID: " << _nextItemId;
+    qDebug() << "RetVal: " << retVal;
 
     return retVal;
 }
 
-bool UDSUtil::updateItem(qint64 accountId, qint64 categoryId, QVariantMap &itemMap, QString srcId, QString name, QString subject, QString mimeType, QString icon, bool read,
-                            QString syncId, QString userData, QString extendedData,
-                            long long timestamp, unsigned int contextState, bool notify) {
-    bool retVal = true;
-    int retCode = -1;
+bool UDSUtil::updateItem(qint64 accountId, qint64 categoryId,
+		QVariantMap &itemMap, QString srcId, QString name, QString subject,
+		QString mimeType, QString icon, bool read, QString syncId,
+		QString userData, QString extendedData, long long timestamp,
+		unsigned int contextState, bool notify)
+{
+	bool retVal = false;
     char sourceId[256];
     char itemName[256];
     char subjectDesc[256];
@@ -719,25 +757,36 @@ bool UDSUtil::updateItem(qint64 accountId, qint64 categoryId, QVariantMap &itemM
     itemMap["accountId"] =  accountId;
     itemMap["categoryId"] = categoryId;
 
-    if (0 != (retCode = uds_item_updated(_udsHandle, inbox_item))) {
-        qCritical() << "UDSUtil::updateItem: uds_item_updated failed for " << name << " with error " << retCode << "\n";
-        retVal = false;
+    int rc = uds_item_updated(_udsHandle, inbox_item);
+    if (rc != UDS_SUCCESS) {
+        qCritical() << "uds_item_updated: failed for " << name << " with error " << rc;
     } else {
-        qDebug() << "UDSUtil::updateItem: item " << sourceId << " updated";
-
-        retVal = true;
+        if (_async) {
+        	qDebug() << "uds_item_updated: waiting...";
+        	if (uds_wait_for_response(_udsHandle, UDS_TIMEOUT)) {
+				rc = uds_get_response(_udsHandle);
+				if (rc != UDS_SUCCESS) {
+					qCritical() << "uds_get_response: failed for " << name << " with error " << rc;
+				}
+        	} else {
+				qCritical() << "uds_wait_for_response: failed for " << name;
+        	}
+        }
     }
 
-    if (_async) {
-        retVal = uds_get_response(_udsHandle);
+    if (rc == UDS_SUCCESS) {
+    	qDebug() << "uds_item_updated: " << sourceId;
+    	retVal = true;
     }
+
     uds_inbox_item_data_destroy(inbox_item);
 
     return retVal;
 }
 
-bool UDSUtil::removeItem(qint64 accountId, qint64 categoryId, QString srcId) {
-    bool retVal = true;
+bool UDSUtil::removeItem(qint64 accountId, qint64 categoryId, QString srcId)
+{
+	bool retVal = false;
     char sourceId[256];
 
     if (!_isRegistrationSuccess) {
@@ -752,17 +801,27 @@ bool UDSUtil::removeItem(qint64 accountId, qint64 categoryId, QString srcId) {
 
     strcpy(sourceId, srcId.toUtf8().data());
 
-    if (0 != (uds_item_removed(_udsHandle, accountId, sourceId))) {
-    	qCritical() << "UDSUtil::removeItem: uds_item_removed for " << sourceId << " failed with error " << retVal << "\n";
-    	retVal = false;
+    int rc = uds_item_removed(_udsHandle, accountId, sourceId);
+    if (rc != UDS_SUCCESS) {
+    	qCritical() << "uds_item_removed: failed for " << sourceId << " with error " << rc;
     } else {
-    	qDebug() << "UDSUtil::removeItem: item: " << sourceId << ": removed";
+        if (_async) {
+        	qDebug() << "uds_item_removed: waiting...";
+        	if (uds_wait_for_response(_udsHandle, UDS_TIMEOUT)) {
+				rc = uds_get_response(_udsHandle);
 
-    	retVal = true;
+				if (rc != UDS_SUCCESS) {
+					qCritical() << "uds_get_response: failed for " << sourceId << " with error " << rc;
+				}
+        	} else {
+				qCritical() << "uds_wait_for_response: failed for " << sourceId;
+        	}
+        }
     }
 
-    if (_async) {
-        retVal = uds_get_response(_udsHandle);
+    if (rc == UDS_SUCCESS) {
+    	qDebug() << "uds_item_removed: " << sourceId;
+    	retVal = true;
     }
 
     return retVal;
@@ -770,10 +829,9 @@ bool UDSUtil::removeItem(qint64 accountId, qint64 categoryId, QString srcId) {
 
 bool UDSUtil::addAccountAction(qint64 accountId, QString action, QString title,
 								QString invtarget, QString invtargettype, QString imgsource,
-								QString mimetype, int placement) {
-
-    bool retval = true;
-    int retVal = -1;
+								QString mimetype, int placement)
+{
+	bool retVal = false;
     char accAction[256];
     char accTitle[256];
     char actionTarget[256];
@@ -814,26 +872,39 @@ bool UDSUtil::addAccountAction(qint64 accountId, QString action, QString title,
     uds_account_action_data_set_image_source(account_action,imgSource);
     uds_account_action_data_set_placement(account_action,(uds_placement_type_t)placement);
 
-    if (0 != (retVal = uds_register_account_action(_udsHandle, accountId, account_action))) {
-        retval = false;
-        qCritical() << "uds_register_account_action failed with error " <<  retVal << "\n";
+    int rc = uds_register_account_action(_udsHandle, accountId, account_action);
+    if (rc != UDS_SUCCESS) {
+        qCritical() << "uds_register_account_action: failed for " << accTitle << " with error " <<  rc;
+    } else {
+		if (_async) {
+			qDebug() << "uds_register_account_action: waiting...";
+			if (uds_wait_for_response(_udsHandle, UDS_TIMEOUT)) {
+				rc = uds_get_response(_udsHandle);
+
+				if (rc != UDS_SUCCESS) {
+			        qCritical() << "uds_get_response: failed for " << accTitle << " with error " <<  rc;
+				}
+			} else {
+				qCritical() << "uds_wait_for_response: failed for " <<  accTitle;
+			}
+		}
     }
 
-    if (_async) {
-        retVal = uds_get_response(_udsHandle);
+    if (rc == UDS_SUCCESS) {
+    	qDebug() << "uds_register_account_action: " << accTitle;
+    	retVal = true;
     }
+
     uds_account_action_data_destroy(account_action);
 
-    return retval;
-
+    return retVal;
 }
 
 bool UDSUtil::updateAccountAction(qint64 accountId, QString action, QString title,
 								QString invtarget, QString invtargettype, QString imgsource,
-								QString mimetype, int placement) {
-
-    bool retval = true;
-	int retVal = -1;
+								QString mimetype, int placement)
+{
+	bool retVal = false;
 	char accAction[256];
 	char accTitle[256];
 	char actionTarget[256];
@@ -873,26 +944,39 @@ bool UDSUtil::updateAccountAction(qint64 accountId, QString action, QString titl
     uds_account_action_data_set_mime_type(account_action,mimeType);
     uds_account_action_data_set_placement(account_action,(uds_placement_type_t)placement);
 
-    if (0 != (retVal = uds_update_account_action(_udsHandle, accountId, account_action))) {
-        retval = false;
-        qCritical() << "uds_update_account_action failed with error " << retVal << "\n";
+    int rc = uds_update_account_action(_udsHandle, accountId, account_action);
+    if (rc != UDS_SUCCESS) {
+        qCritical() << "uds_update_account_action: failed for " << accTitle << " with error " <<  rc;
     } else {
+        if (_async) {
+			qDebug() << "uds_update_account_action: waiting...";
+			if (uds_wait_for_response(_udsHandle, UDS_TIMEOUT)) {
+				rc = uds_get_response(_udsHandle);
+
+				if (rc != UDS_SUCCESS) {
+			        qCritical() << "uds_get_response: failed for " << accTitle << " with error " <<  rc;
+				}
+			} else {
+				qCritical() << "uds_wait_for_response: failed for " <<  accTitle;
+			}
+        }
     }
 
-    if (_async) {
-        retVal = uds_get_response(_udsHandle);
+    if (rc == UDS_SUCCESS) {
+        qDebug() << "uds_update_account_action: " << accTitle;
+    	retVal = true;
     }
+
     uds_account_action_data_destroy(account_action);
 
-    return retval;
+    return retVal;
 }
 
 bool UDSUtil::addItemAction(qint64 accountId, QString action,
                             QString title, QString invtarget, QString invtargettype,
-                            QString imgsource, QString mimetype, int placement) {
-
-    bool retval = true;
-    int retVal = -1;
+                            QString imgsource, QString mimetype, int placement)
+{
+	bool retVal = false;
 	char itemAction[256];
 	char itemActionTitle[256];
 	char itemActionTarget[256];
@@ -933,27 +1017,41 @@ bool UDSUtil::addItemAction(qint64 accountId, QString action,
     uds_item_action_data_set_placement(item_action,(uds_placement_type_t)placement);
     uds_item_action_data_set_context_mask(item_action,1);
 
-    if (0 != (retVal = uds_register_item_context_action(_udsHandle,
-                    accountId, item_action))) {
-        retval = false;
-        qCritical() << "uds_register_item_context_action failed with error " << retVal << "\n";
+    int rc = uds_register_item_context_action(_udsHandle, accountId, item_action);
+    if (rc != UDS_SUCCESS) {
+    	qCritical() << "uds_register_item_context_action: failed with error " << rc;
+    	return false;
+    } else {
+        if (_async) {
+			qDebug() << "uds_register_item_context_action: waiting...";
+			if (uds_wait_for_response(_udsHandle, UDS_TIMEOUT)) {
+				rc = uds_get_response(_udsHandle);
+
+				if (rc != UDS_SUCCESS) {
+			        qCritical() << "uds_get_response: failed for " << itemActionTitle << " with error " <<  rc;
+				}
+			} else {
+				qCritical() << "uds_wait_for_response: failed for " <<  itemActionTitle;
+			}
+        }
     }
 
-    if (_async) {
-        retVal = uds_get_response(_udsHandle);
+    if (rc == UDS_SUCCESS) {
+        qDebug() << "uds_register_item_context_action: " << itemActionTitle;
+    	retVal = true;
     }
+
     uds_item_action_data_destroy(item_action);
 
-    return retval;
+    return retVal;
 
 }
 
 bool UDSUtil::updateItemAction(qint64 accountId, QString action,
                             QString title, QString invtarget, QString invtargettype,
-                            QString imgsource, QString mimetype, int placement) {
-
-    bool retval = true;
-    int retVal = -1;
+                            QString imgsource, QString mimetype, int placement)
+{
+	bool retVal = false;
 	char itemAction[256];
 	char itemActionTitle[256];
 	char itemActionTarget[256];
@@ -994,17 +1092,31 @@ bool UDSUtil::updateItemAction(qint64 accountId, QString action,
     uds_item_action_data_set_placement(item_action,(uds_placement_type_t)placement);
     uds_item_action_data_set_context_mask(item_action,1);
 
-    if (0 != (retVal = uds_update_item_context_action(_udsHandle,
-            accountId, item_action))) {
-        retval = false;
-        qCritical() << "uds_update_item_context_action failed with error " << retVal << "\n";
+    int rc = uds_update_item_context_action(_udsHandle, accountId, item_action);
+    if (rc != UDS_SUCCESS) {
+        qCritical() << "uds_update_item_context_action: failed with error " << rc;
+    } else {
+        if (_async) {
+			qDebug() << "uds_update_item_context_action: waiting...";
+			if (uds_wait_for_response(_udsHandle, UDS_TIMEOUT)) {
+				rc = uds_get_response(_udsHandle);
+
+				if (rc != UDS_SUCCESS) {
+			        qCritical() << "uds_get_response: failed for " << itemActionTitle << " with error " <<  rc;
+				}
+			} else {
+				qCritical() << "uds_wait_for_response: failed for " <<  itemActionTitle;
+			}
+        }
     }
 
-    if (_async) {
-        retVal = uds_get_response(_udsHandle);
+    if (rc == UDS_SUCCESS) {
+        qDebug() << "uds_update_item_context_action: " << itemActionTitle;
+    	retVal = true;
     }
+
     uds_item_action_data_destroy(item_action);
 
-    return retval;
+    return retVal;
 }
 

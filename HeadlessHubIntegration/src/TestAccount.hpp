@@ -24,6 +24,11 @@ class TestAccount: public HubAccount {
 Q_OBJECT
 
 public:
+    enum HubCategories {
+        Messages = 1,
+        Calls = 2,
+        Voicemails = 3,
+    };
 	TestAccount(UDSUtil* udsUtil, HubCache* hubCache);
 	virtual ~TestAccount();
 

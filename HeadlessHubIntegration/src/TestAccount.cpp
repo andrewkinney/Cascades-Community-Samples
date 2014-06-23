@@ -57,9 +57,24 @@ TestAccount::TestAccount(UDSUtil* udsUtil, HubCache* hubCache) : HubAccount(udsU
 
     QVariantList categories;
     QVariantMap category;
-    category["categoryId"] = 1; // categories are created with sequential category Ids starting at 1 so number your predefined categories
+    category["categoryId"] = Messages; // categories are created with sequential category Ids starting at 1 so number your predefined categories
                                 // accordingly
-    category["name"] = "Inbox";
+    category["name"] = tr("Messages");
+    category["parentCategoryId"] = 0; // default parent category ID for root categories
+    categories << category;
+
+    category.clear();
+    category["categoryId"] = Calls; // categories are created with sequential category Ids starting at 1 so number your predefined categories
+								// accordingly
+	category["name"] = tr("Calls");
+	category["parentCategoryId"] = 0; // default parent category ID for root categories
+
+	categories << category;
+
+	category.clear();
+    category["categoryId"] = Voicemails; // categories are created with sequential category Ids starting at 1 so number your predefined categories
+                                // accordingly
+    category["name"] = tr("Voicemails");
     category["parentCategoryId"] = 0; // default parent category ID for root categories
     categories << category;
     initializeCategories(categories);

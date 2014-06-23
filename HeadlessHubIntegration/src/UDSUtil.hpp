@@ -129,8 +129,10 @@ public:
      *
      *   @param accountId   - account ID
      *   @param name        - account name
+     *
+     *   @returns true if successful, false otherwise.
      */
-    Q_INVOKABLE void cleanupAccountsExcept(const qint64 accountId, const QString& name);
+    Q_INVOKABLE bool cleanupAccountsExcept(const qint64 accountId, const QString& name);
 
     /*
      *   Add a new category to an existing UDS account.
